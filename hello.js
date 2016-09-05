@@ -1,10 +1,10 @@
 /*
- * Copyright 2015, Tim Rochford
+ * Copyright 2015-2016, Tim Rochford
  */
 
 "use_strict";
 
-var hello = require('./build/Release/hello.node');
+var hello = require('bindings')('hello');
 
 function callback(options, result)
 {

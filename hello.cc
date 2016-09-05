@@ -1,24 +1,41 @@
 /*
- * Copyright 2015, Tim Rochford
+ * Copyright 2015-2016, Tim Rochford
  */
 #include <nan.h>
-#include <v8.h>
 
-using namespace v8;
+using v8::Function;
+using v8::FunctionTemplate;
+using v8::Handle;
+using v8::Object;
+using v8::String;
+using v8::Local;
+using v8::Value;
+using v8::Number;
 
-class ProcessWorker : public NanAsyncWorker
+using Nan::AsyncQueueWorker;
+using Nan::AsyncWorker;
+using Nan::Callback;
+using Nan::HandleScope;
+using Nan::GetFunction;
+using Nan::New;
+using Nan::Null;
+using Nan::Set;
+
+using Nan::Persistent;
+
+class ProcessWorker : public AsyncWorker
 {
   public:
-    ProcessWorker(NanCallback *callback,
+    ProcessWorker(Callback *callback,
                   Handle<Object>& obj)
-        : NanAsyncWorker(callback)
+        : AsyncWorker(callback)
     {
-        NanAssignPersistent(_respObj, obj);
+        _optionsObject.Reset(obj);
     }
 
     ~ProcessWorker()
     {
-        NanDisposePersistent(_respObj);
+        _optionsObject.Reset();
     }
 
     // Executed inside the worker-thread.
@@ -35,32 +52,33 @@ class ProcessWorker : public NanAsyncWorker
     // so it is safe to use V8 again
     void HandleOKCallback()
     {
-        NanScope();
+        using namespace v8;
+        Nan::HandleScope scope;
 
-        Handle<Object> jsonObj = NanNew<Object>();
-        jsonObj->Set(NanNew<String>("widgets"),
-                     NanNew<String>("button"));
-        Handle<Value> argv[] = { NanNew(_respObj), jsonObj };
+        Local<Object> returnedObject = Nan::New<Object>();
+
+        returnedObject->Set(Nan::New("age").ToLocalChecked(), New<Number>(42));
+        returnedObject->Set(Nan::New("name").ToLocalChecked(), New<String>("Bob").ToLocalChecked());
+
+        v8::Local<v8::Object> object = Nan::New(_optionsObject);
+        Local<Value> argv[] = { object, returnedObject};
         callback->Call(2, argv);
     }
-
 private:
-    Persistent<Object> _respObj;
+    Persistent<Object> _optionsObject;
 };
 
 NAN_METHOD(Process)
 {
-   NanScope();
-   NanCallback *callback = new NanCallback(args[0].As<Function>());
-   Handle<Object> resp = Local<Object>::Cast(args[1]);
-   NanAsyncQueueWorker(new ProcessWorker(callback, resp));
-   NanReturnUndefined();
+   Callback *callback = new Callback(info[0].As<Function>());
+   Handle<Object> resp = Local<Object>::Cast(info[1]);
+   AsyncQueueWorker(new ProcessWorker(callback, resp));
 }
 
-void InitAll(Handle<Object> exports)
+NAN_MODULE_INIT(InitAll)
 {
-    exports->Set(NanNew<String>("process"),
-                 NanNew<FunctionTemplate>(Process)->GetFunction());
+    Set(target, New<String>("process").ToLocalChecked(),
+    GetFunction(New<FunctionTemplate>(Process)).ToLocalChecked());
 }
 
 NODE_MODULE(hello, InitAll);
